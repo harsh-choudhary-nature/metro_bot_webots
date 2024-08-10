@@ -1,0 +1,244 @@
+#VRML_SIM R2023b utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "../protos/RectangleArena.proto"
+
+WorldInfo {
+}
+Viewpoint {
+  orientation 0.5773502691896257 -0.5773502691896257 -0.5773502691896257 4.188860715675084
+  position -1.1901845548944234 -0.6001845473814436 6.947850489765948
+  follow "robot"
+  followType "None"
+}
+TexturedBackground {
+}
+TexturedBackgroundLight {
+}
+RectangleArena {
+  floorSize 4 4
+  floorTileSize 4 4
+  floorAppearance PBRAppearance {
+    baseColorMap ImageTexture {
+      url [
+        "../../oval_line.png"
+      ]
+      repeatS FALSE
+      repeatT FALSE
+    }
+    roughness 1
+    metalness 0
+  }
+}
+Solid {
+  translation -1.19 -0.6 0.05
+  children [
+    DEF station_shape_1 Shape {
+      appearance PBRAppearance {
+      }
+      geometry Box {
+        size 0.2 0.5 0.1
+      }
+    }
+  ]
+  name "station 1"
+  boundingObject USE station_shape_1
+  physics Physics {
+  }
+}
+Robot {
+  translation -0.412595 -1.30239 0.06
+  rotation 0 0 1 2.8798
+  children [
+    DistanceSensor {
+      translation 0.1 0.05 0.01
+      rotation 0 0 1 0.78
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Capsule {
+            height 0.005
+            radius 0.005
+          }
+        }
+      ]
+      name "ultrasonic left"
+      type "sonar"
+    }
+    DistanceSensor {
+      translation 0.1 -0.05 0.01
+      rotation 0 0 1 -0.78
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Capsule {
+            height 0.005
+            radius 0.005
+          }
+        }
+      ]
+      name "ultrasonic right"
+      type "sonar"
+    }
+    DistanceSensor {
+      translation 0.1 0 0.01
+      children [
+        Shape {
+          appearance PBRAppearance {
+          }
+          geometry Capsule {
+            height 0.005
+            radius 0.005
+          }
+        }
+      ]
+      name "ultrasonic front"
+      type "sonar"
+    }
+    DistanceSensor {
+      translation 0.13 0.05 0
+      rotation 0 1 0 1.57
+      children [
+        DEF cone_shape Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cone {
+            bottomRadius 0.01
+            height 0.02
+          }
+        }
+      ]
+      name "ir left"
+      type "infra-red"
+    }
+    DistanceSensor {
+      translation 0.13 -0.05 0
+      rotation 0 1 0 1.57
+      children [
+        DEF cone_shape Shape {
+          appearance PBRAppearance {
+          }
+          geometry Cone {
+            bottomRadius 0.01
+            height 0.02
+          }
+        }
+      ]
+      name "ir right"
+      type "infra-red"
+    }
+    DEF hinge_2_joint Hinge2Joint {
+      jointParameters HingeJointParameters {
+        axis 0 1 0
+        anchor 0.11 0 -0.02
+      }
+      jointParameters2 JointParameters {
+        axis 1 0 0
+      }
+      endPoint Solid {
+        translation 0.11 0 -0.02
+        rotation 1 -7.166400809222419e-16 -5.792022571837298e-16 1.5699999999999994
+        children [
+          DEF caster_wheel_shape Shape {
+            appearance PBRAppearance {
+              baseColor 1 1 0
+              roughness 1
+              metalness 0
+            }
+            geometry Sphere {
+              radius 0.01
+            }
+          }
+        ]
+        name "solid(3)"
+        boundingObject USE caster_wheel_shape
+        physics DEF wheel_physics Physics {
+        }
+      }
+    }
+    DEF hinge_joint HingeJoint {
+      jointParameters HingeJointParameters {
+        axis 0 1 0
+        anchor -0.075 0.077 0
+      }
+      device [
+        RotationalMotor {
+          name "rotational motor left"
+        }
+      ]
+      endPoint DEF wheel_solid Solid {
+        translation -0.075 0.077 0
+        rotation 1 -5.497512949540484e-16 -7.853589927914978e-17 1.57
+        children [
+          DEF wheel_shape Shape {
+            appearance PBRAppearance {
+              baseColor 1 1 0
+              roughness 1
+              metalness 0
+            }
+            geometry Cylinder {
+              height 0.01
+              radius 0.025
+            }
+          }
+        ]
+        boundingObject USE wheel_shape
+        physics DEF whell_physics Physics {
+        }
+      }
+    }
+    DEF hinge_joint_other HingeJoint {
+      jointParameters HingeJointParameters {
+        axis 0 1 0
+        anchor -0.075 -0.077 0
+      }
+      device [
+        RotationalMotor {
+          name "rotational motor right"
+        }
+      ]
+      endPoint DEF wheel_solid Solid {
+        translation -0.075 -0.077 0
+        rotation 1 1.5707174317681087e-16 0 1.5700007046132312
+        children [
+          DEF wheel_shape Shape {
+            appearance PBRAppearance {
+              baseColor 1 1 0
+              roughness 1
+              metalness 0
+            }
+            geometry Cylinder {
+              height 0.01
+              radius 0.025
+            }
+          }
+        ]
+        name "solid(2)"
+        boundingObject USE wheel_shape
+        physics DEF whell_physics Physics {
+        }
+      }
+    }
+    Pose {
+      children [
+        DEF robot_shape Shape {
+          appearance PBRAppearance {
+            baseColor 1 0 1
+            roughness 1
+            metalness 0
+          }
+          geometry Box {
+            size 0.25 0.15 0.02
+          }
+        }
+      ]
+    }
+  ]
+  boundingObject USE robot_shape
+  physics Physics {
+  }
+  controller "robot_controller"
+}

@@ -1,0 +1,153 @@
+#VRML_SIM R2023b utf8
+
+PROTO HarshRobot []
+{
+Robot {
+    translation 0.7167 0.0250005 0.06
+    rotation 0 0 1 1.5708
+    children [
+    DistanceSensor {
+        translation 0.13 0.05 0
+        rotation 0 1 0 1.57
+        children [
+        DEF cone_shape Shape {
+            appearance PBRAppearance {
+            }
+            geometry Cone {
+            bottomRadius 0.01
+            height 0.02
+            }
+        }
+        ]
+        name "ir left"
+        type "infra-red"
+    }
+    DistanceSensor {
+        translation 0.13 -0.05 0
+        rotation 0 1 0 1.57
+        children [
+        DEF cone_shape Shape {
+            appearance PBRAppearance {
+            }
+            geometry Cone {
+            bottomRadius 0.01
+            height 0.02
+            }
+        }
+        ]
+        name "ir right"
+        type "infra-red"
+    }
+    DEF hinge_2_joint Hinge2Joint {
+        jointParameters HingeJointParameters {
+        axis 0 1 0
+        anchor 0.11 0 -0.02
+        }
+        jointParameters2 JointParameters {
+        axis 1 0 0
+        }
+        endPoint Solid {
+        translation 0.11 0 -0.02
+        rotation 1 0 0 1.57
+        children [
+            DEF caster_wheel_shape Shape {
+            appearance PBRAppearance {
+                baseColor 1 1 0
+                roughness 1
+                metalness 0
+            }
+            geometry Sphere {
+                radius 0.01
+            }
+            }
+        ]
+        name "solid(3)"
+        boundingObject USE caster_wheel_shape
+        physics DEF wheel_physics Physics {
+        }
+        }
+    }
+    DEF hinge_joint HingeJoint {
+        jointParameters HingeJointParameters {
+        axis 0 1 0
+        anchor -0.075 0.077 0
+        }
+        device [
+        RotationalMotor {
+            name "rotational motor left"
+        }
+        ]
+        endPoint DEF wheel_solid Solid {
+        translation -0.075 0.077 0
+        rotation 1 0 0 1.57
+        children [
+            DEF wheel_shape Shape {
+            appearance PBRAppearance {
+                baseColor 1 1 0
+                roughness 1
+                metalness 0
+            }
+            geometry Cylinder {
+                height 0.01
+                radius 0.025
+            }
+            }
+        ]
+        boundingObject USE wheel_shape
+        physics DEF whell_physics Physics {
+        }
+        }
+    }
+    DEF hinge_joint_other HingeJoint {
+        jointParameters HingeJointParameters {
+        axis 0 1 0
+        anchor -0.075 -0.077 0
+        }
+        device [
+        RotationalMotor {
+            name "rotational motor right"
+        }
+        ]
+        endPoint DEF wheel_solid Solid {
+        translation -0.075 -0.077 0
+        rotation 1 0 0 1.570000704613232
+        children [
+            DEF wheel_shape Shape {
+            appearance PBRAppearance {
+                baseColor 1 1 0
+                roughness 1
+                metalness 0
+            }
+            geometry Cylinder {
+                height 0.01
+                radius 0.025
+            }
+            }
+        ]
+        name "solid(2)"
+        boundingObject USE wheel_shape
+        physics DEF whell_physics Physics {
+        }
+        }
+    }
+    Pose {
+        children [
+        DEF robot_shape Shape {
+            appearance PBRAppearance {
+            baseColor 1 0 1
+            roughness 1
+            metalness 0
+            }
+            geometry Box {
+            size 0.25 0.15 0.02
+            }
+        }
+        ]
+    }
+    ]
+    boundingObject USE robot_shape
+    physics Physics {
+    }
+    controller "robot_controller"
+    }
+}

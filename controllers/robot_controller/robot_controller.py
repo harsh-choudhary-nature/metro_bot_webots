@@ -22,8 +22,8 @@ class Environment:
             elif value>900:
                 floored_sensor_values.append(900)
             else:
-                floored_sensor_values.append((value-500)/100)
-        return tuple(floored_sensor_values)+(False,0)
+                floored_sensor_values.append(int((value-500)/100))
+        return tuple(floored_sensor_values)+(False,)
 
     def get_reward_next_state(self,state,action):
         next_state_sensor_values = [self.agent.us[i].getValue() for i in range(len(self.agent.us))]
@@ -34,21 +34,23 @@ class Environment:
             elif value>900:
                 next_state_floored_sensor_values.append(900)
             else:
-                next_state_floored_sensor_values.append((value-500)/100)
+                # print(value)
+                next_state_floored_sensor_values.append(int((value-500)/100))
         
         val = 0
         if action=="stop":
             val -= 1
-            if min(state[:3])<900:
-                val += 1000/min(state[:3])
-                # print("Correct stopped")
+            # if min(state[:3])==900:
+                # val += 1000/min(state[:3])
+                # print("False stopped")
                 # time.sleep(1)
-            if state[3] and state[4]==self.agent.STOPPED_MAX:
-                val -= 1        # penalise for waiting too long
-                print("False stop")
+            # if state[3] and state[4]==self.agent.STOPPED_MAX:
+            #     val -= 1        # penalise for waiting too long
+            #     print("False stop")
                 # time.sleep(1)
             # penalise if restopping at the same station again, so modify agent to include these functionality of 30s wait at one station and no restopping via actions
-
+            # else:
+            #     val -= 1
         else:
             val += 1
             # penalise for missing the station
@@ -56,26 +58,21 @@ class Environment:
                 val -= 3
                 print("Missed the station")
                 # time.sleep(1)
+            elif state[3] and min((state[0],state[2]))<900 and min((next_state_floored_sensor_values[0],next_state_floored_sensor_values[2]))==900:
+                val += 1000/min(state[:3])
+                print("Moving from station")
             # penalise if moving from station too early
-            if state[3] and min((state[0],state[2]))<900 and state[4]<self.agent.STOPPED_MAX:
-                val -= 10*(self.agent.STOPPED_MAX - state[4])/self.agent.STOPPED_MAX
-                print("Early moving")
+            # if state[3] and min((state[0],state[2]))<900 and state[4]<self.agent.STOPPED_MAX:
+            #     val -= 10*(self.agent.STOPPED_MAX - state[4])/self.agent.STOPPED_MAX
+            #     print("Early moving")
                 # time.sleep(1)
                 # after modifying actions this should never happen
 
         next_state = next_state_floored_sensor_values
         if action=="stop":
             next_state.append(True)
-            if not state[3]:
-                next_state.append(0)
-            else:
-                next_state.append(min(state[4]+1,self.agent.STOPPED_MAX))
         else:
             next_state.append(False)
-            if state[3]:
-                next_state.append(0)
-            else:
-                next_state.append(min(state[4]+1,self.agent.STOPPED_MAX))
             
         return val,tuple(next_state)
 
@@ -115,21 +112,27 @@ class Agent:
         self.counter = 0
         self.COUNTER_MAX = 5
         self.STOPPED_MAX = 960
+        self.last_act_time = 0
 
         # related to Q learning
         self.actions = ["stop", "move"]
         self.QATable = dict()
+        self.exploration_table = dict()
         self.policy = dict()
         self.discount = 0.8
-        self.epsilon = 0.4
         self.alpha = 0.1
 
     def get_actions(self,state):
-        if state[3] and state[4]<self.STOPPED_MAX:
-            return ["stop"]
-        elif not state[3] and state[4]<self.STOPPED_MAX:
-            return ["move"]
+        if self.last_act_time<self.STOPPED_MAX and state[3]:
+            actions = ["stop"]
+            for action in actions:
+                if action not in self.QATable[state]:
+                    self.QATable[state][action] = 0
+            return actions
         else:
+            for action in self.actions:
+                if action not in self.QATable[state]:
+                    self.QATable[state][action] = 0
             return self.actions
 
     def register_initial_state(self,state:tuple):
@@ -138,21 +141,33 @@ class Agent:
         for action in self.get_actions(self.QAState):
             self.QATable[self.QAState][action] = 0          # initialising with empty dictionary
         self.policy[self.QAState] = np.random.choice(self.get_actions(self.QAState))
+        self.exploration_table[state] = 2
 
     def act(self, leftSpeed, rightSpeed):
         # epsilon greedy
         p = np.random.rand()
         action = None
-        if p<self.epsilon:
+        if p<0.2:
             # take random action
             action = np.random.choice(self.get_actions(self.QAState))
+            assert action in self.QATable[self.QAState]
         else:
             # take action according to best policy till now
             action = self.policy[self.QAState]
+            assert action in self.policy[self.QAState]
+            assert action in self.QATable[self.QAState]
         if action == "move":
+            if self.QAState[3]:
+                self.last_act_time = 0
+            else:
+                self.last_act_time = min(self.STOPPED_MAX,self.last_act_time+1)
             self.left_motor.setVelocity(leftSpeed)
             self.right_motor.setVelocity(rightSpeed)
         else:
+            if self.QAState[3]:
+                self.last_act_time = min(self.STOPPED_MAX,self.last_act_time+1)
+            else:
+                self.last_act_time = 0
             self.left_motor.setVelocity(0)
             self.right_motor.setVelocity(0)
         return action
@@ -209,14 +224,19 @@ class Agent:
 
     def update_QATablePolicy(self,state,action,reward,next_state):
         max_QA_next_state = 0
+        assert action in self.QATable[state]
         if next_state in self.QATable:
             max_QA_next_state = max([self.QATable[next_state][action] for action in self.get_actions(next_state)])
+            self.exploration_table[next_state] += 1
         else:
             self.QATable[next_state] = dict()
+            self.exploration_table[next_state] = 2
             self.policy[next_state] = np.random.choice(self.get_actions(next_state))
             for action in self.get_actions(next_state):
                 self.QATable[next_state][action] = 0
-
+        
+        
+        assert action in self.QATable[state], print(state, next_state)
         self.QATable[state][action] = (1-self.alpha)*self.QATable[state][action] + self.alpha*(reward + self.discount*max_QA_next_state)
 
         if self.QATable[state][action]>self.QATable[state][self.policy[state]]:
@@ -246,13 +266,15 @@ agent.register_initial_state(environment.get_initial_state())
 # Main loop:
 # - perform simulation steps until Webots is stopping the controller
 while robot.step(timestep) != -1:
-    # print(f"agent.QAState = {agent.QAState}")
+    # if min(agent.QAState[:3])<900:
+        # print(f"agent.QAState = {agent.QAState}")
     # print(f"agent.QATable: {agent.QATable}")
 
     # print(f"len(agent.QATable.keys()): {len(agent.QATable.keys())}")
     leftSpeed, rightSpeed = agent.line_follow()
     action = agent.act(leftSpeed,rightSpeed)
     reward, next_state = environment.get_reward_next_state(agent.QAState,action)
+    assert action in agent.QATable[agent.QAState]
     # print("action = ",action," reward = ",reward)
     # print(agent.policy)
     agent.update_QATablePolicy(agent.QAState,action,reward,next_state)

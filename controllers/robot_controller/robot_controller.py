@@ -18,23 +18,23 @@ class Environment:
         floored_sensor_values = []
         for value in sensor_values:
             if value<500:
-                floored_sensor_values.append(450)
+                floored_sensor_values.append(400)
             elif value>900:
                 floored_sensor_values.append(900)
             else:
-                floored_sensor_values.append((value-500)/50)
-        return tuple(floored_sensor_values)+(False,30)
+                floored_sensor_values.append((value-500)/100)
+        return tuple(floored_sensor_values)+(False,0)
 
     def get_reward_next_state(self,state,action):
         next_state_sensor_values = [self.agent.us[i].getValue() for i in range(len(self.agent.us))]
         next_state_floored_sensor_values = []
         for value in next_state_sensor_values:
             if value<500:
-                next_state_floored_sensor_values.append(450)
+                next_state_floored_sensor_values.append(400)
             elif value>900:
                 next_state_floored_sensor_values.append(900)
             else:
-                next_state_floored_sensor_values.append((value-500)/50)
+                next_state_floored_sensor_values.append((value-500)/100)
         
         val = 0
         if action=="stop":
@@ -61,6 +61,7 @@ class Environment:
                 val -= 10*(self.agent.STOPPED_MAX - state[4])/self.agent.STOPPED_MAX
                 print("Early moving")
                 # time.sleep(1)
+                # after modifying actions this should never happen
 
         next_state = next_state_floored_sensor_values
         if action=="stop":
@@ -71,7 +72,10 @@ class Environment:
                 next_state.append(min(state[4]+1,self.agent.STOPPED_MAX))
         else:
             next_state.append(False)
-            next_state.append(state[4])
+            if state[3]:
+                next_state.append(0)
+            else:
+                next_state.append(min(state[4]+1,self.agent.STOPPED_MAX))
             
         return val,tuple(next_state)
 
@@ -120,12 +124,20 @@ class Agent:
         self.epsilon = 0.4
         self.alpha = 0.1
 
+    def get_actions(self,state):
+        if state[3] and state[4]<self.STOPPED_MAX:
+            return ["stop"]
+        elif not state[3] and state[4]<self.STOPPED_MAX:
+            return ["move"]
+        else:
+            return self.actions
+
     def register_initial_state(self,state:tuple):
         self.QAState = state
         self.QATable[self.QAState] = dict()
-        for action in self.actions:
+        for action in self.get_actions(self.QAState):
             self.QATable[self.QAState][action] = 0          # initialising with empty dictionary
-        self.policy[self.QAState] = np.random.choice(self.actions)
+        self.policy[self.QAState] = np.random.choice(self.get_actions(self.QAState))
 
     def act(self, leftSpeed, rightSpeed):
         # epsilon greedy
@@ -133,7 +145,7 @@ class Agent:
         action = None
         if p<self.epsilon:
             # take random action
-            action = np.random.choice(self.actions)
+            action = np.random.choice(self.get_actions(self.QAState))
         else:
             # take action according to best policy till now
             action = self.policy[self.QAState]
@@ -198,11 +210,11 @@ class Agent:
     def update_QATablePolicy(self,state,action,reward,next_state):
         max_QA_next_state = 0
         if next_state in self.QATable:
-            max_QA_next_state = max([self.QATable[next_state][action] for action in self.actions])
+            max_QA_next_state = max([self.QATable[next_state][action] for action in self.get_actions(next_state)])
         else:
             self.QATable[next_state] = dict()
-            self.policy[next_state] = np.random.choice(self.actions)
-            for action in self.actions:
+            self.policy[next_state] = np.random.choice(self.get_actions(next_state))
+            for action in self.get_actions(next_state):
                 self.QATable[next_state][action] = 0
 
         self.QATable[state][action] = (1-self.alpha)*self.QATable[state][action] + self.alpha*(reward + self.discount*max_QA_next_state)

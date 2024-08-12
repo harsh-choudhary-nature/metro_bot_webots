@@ -8,7 +8,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
-  position -0.02161723651543868 0.5729635088143656 15.646663054211958
+  position 0.81406782839919 -0.4273406007708806 14.207940780878083
   follow "robot"
   followType "None"
 }
@@ -48,8 +48,8 @@ DEF station_1 Solid {
   }
 }
 Robot {
-  translation 0.66338 0.510925 0.06
-  rotation 0 0 1 -1.8325853071795866
+  translation 0.799722 -0.40985 0.06
+  rotation 0 0 1 -1.5707853071795865
   children [
     DistanceSensor {
       translation 0.1 0.05 0.01
@@ -240,12 +240,12 @@ Robot {
   boundingObject USE robot_shape
   physics Physics {
   }
-  controller "robot_controller_2"
+  controller "robot_controller_3"
   supervisor TRUE
 }
 DEF station_2 Solid {
   translation -1.09909 1.20662 0.05
-  rotation 0 0 1 2.618
+  rotation 0 0 1 -0.523595307179586
   children [
     DEF solid_shape_2 Shape {
       appearance PBRAppearance {

@@ -12,11 +12,23 @@ import time
 np.random.seed(42)
 
 class Station:
-    def __init__(self, pos, timeout):
-        self.pos = pos
-        self.arrived = 0
+    def __init__(self, pos, length_y, timeout):
+        self.pos = (pos[0],pos[1])
+        self.pos1 = (pos[0],pos[1]-length_y/2)
+        self.pos2 = (pos[0],pos[1]+length_y/2)
         self.TIMEOUT = timeout
-        self.stopped = 0
+        self.arrived = 0
+        self.timer = 0
+        self.stopped_for = 0
+        self.entered_pos_index = 1
+        self.moved_after_stopping = 0
+
+    def reset(self):
+        self.arrived = 0
+        self.timer = 0
+        self.stopped_for = 0
+        self.entered_pos_index = 1
+        self.moved_after_stopping = 0
 
 class Environment:
     def __init__(self,robot,stations):
@@ -28,16 +40,29 @@ class Environment:
         for i in range(3):
             self.us.append(robot.getDevice(self.usNames[i]))
             self.us[i].enable(timestep)
-        self.station_positions = [stations[i].getPosition() for i in range(len(self.stations))]
-        self.stations_arrived = [False, False, False, False]
-        self.stations_stopped_and_moved = [0,0,0,0]
-        self.threshold = 0.25
+        
         # [0.782431, 0.955251, 0.029863679999999997]
         # [0.782440516996644, 0.9552865211568394, 0.012192729170731165], so norm is 0.017
-        self.safe_distance = 0.015
         self.TIMEOUT = int(self.robot.getBasicTimeStep())*20            # 20 s assumed distance between 2 stations
         self.WAITTIME = int(self.robot.getBasicTimeStep())*10           # 10 s is stopping time of robot
-        self.stations_timeout = [0]*len(self.station_positions)
+        self.station_positions = [stations[i].getPosition() for i in range(len(self.stations))]
+        # print(self.station_positions)
+        self.stations = []
+        shape_node = robot.getFromDef("station_shape_1")
+        assert shape_node is not None
+        geometry_field = shape_node.getField("geometry")
+        assert geometry_field is not None
+        geometry_node = geometry_field.getSFNode()
+        assert geometry_node is not None
+        geometry_type = geometry_node.getTypeName()
+        assert geometry_type=="Box"
+        size_field = geometry_node.getField("size")
+        assert size_field is not None
+        size = size_field.getSFVec3f()
+        length = size[1]
+        for i in range(len(stations)):
+            self.stations.append(Station(self.station_positions[i],length,self.TIMEOUT))
+            print(self.stations[-1].pos1,self.stations[-1].pos2)
         
     def get_initial_state(self):
         sensor_values = [self.us[i].getValue() for i in range(len(self.us))]
@@ -51,7 +76,26 @@ class Environment:
                 floored_sensor_values.append(500 + (int((value-500)/100))*100)
         return tuple(floored_sensor_values)
 
-    def get_reward_next_state(self,state,position,action):
+    def get_closest_station(self,robot_position):
+        closest_station_index = -1
+        closest_station_distance = 500
+        for i in range(len(self.station_positions)):
+            if self.stations[i].timer == self.TIMEOUT:
+                self.stations[i].reset()
+            if self.stations[i].arrived==1 or self.stations[i].arrived==2:
+                # either arrived or left
+                self.stations[i].timer += 1
+            cur_dist = np.linalg.norm(np.array(robot_position)-np.array(self.station_positions[i]))            
+            if closest_station_index==-1:
+                closest_station_index = i
+                closest_station_distance = cur_dist
+            elif closest_station_distance>cur_dist:
+                closest_station_index = i
+                closest_station_distance = cur_dist
+
+        return closest_station_index, closest_station_distance
+
+    def get_reward_next_state(self,state,robot_position,action):
         next_state_sensor_values = [self.us[i].getValue() for i in range(len(self.us))]
         next_state_floored_sensor_values = []
         for value in next_state_sensor_values:
@@ -64,55 +108,58 @@ class Environment:
                 next_state_floored_sensor_values.append(500 + (int((value-500)/100))*100)
         
         val = 0
-        robot_position = position
-        closest_station_index = -1
-        closest_station_distance = 500
-        for i in range(len(self.station_positions)):
-            if self.stations_timeout[i]>0:
-                self.stations_timeout[i] -= 1
-                if self.stations_timeout[i]==0:
-                    self.stations_stopped_and_moved[i] = 0
-            cur_dist = np.linalg.norm(np.array(robot_position)-np.array(self.station_positions[i]))            
-            if closest_station_index==-1:
-                closest_station_index = i
-                closest_station_distance = cur_dist
-            elif closest_station_distance>cur_dist:
-                closest_station_index = i
-                closest_station_distance = cur_dist
-        print(f"action {action} closest_station_distance {closest_station_distance} self.station_timeout {self.stations_timeout}")
+        closest_station_index, closest_station_distance = self.get_closest_station(robot_position)
+        # print(f"action {action} closest_station_distance {closest_station_distance}")
 
-
+        robot_position = (robot_position[0],robot_position[1])
+        current_position = self.robot_node.getPosition()
+        current_position = (current_position[0],current_position[1])
         if action=="stop":
-            if self.stations_arrived[closest_station_index] and self.stations_timeout[closest_station_index]<(self.TIMEOUT - self.WAITTIME + 1):
-                val = 1/closest_station_distance
-                if self.stations_stopped_and_moved[closest_station_index]==2:
-                    print("restopping at station")
-                    val = -1
-                elif self.stations_stopped_and_moved[closest_station_index]==0:
-                    self.stations_stopped_and_moved[closest_station_index] = 1
-                    print("caught station first")
-                else:
-                    assert False, print("must not stop here")
-            else:
-                print("False stop")
+            if self.stations[closest_station_index].arrived==1 and self.stations[closest_station_index].stopped_for<self.WAITTIME and self.stations[closest_station_index].moved_after_stopping==0:
+                val = 10/closest_station_distance
+                self.stations[closest_station_index].stopped_for += 1
+                print("stopped correct at station")
+            elif self.stations[closest_station_index].arrived==1 and self.stations[closest_station_index].stopped_for>=self.WAITTIME and self.stations[closest_station_index].moved_after_stopping==0:
                 val = -1
-        else:
-            if self.stations_stopped_and_moved[closest_station_index] == 1:
-                self.stations_stopped_and_moved[closest_station_index] = 2
-            if closest_station_distance>self.threshold and closest_station_distance<self.threshold+self.safe_distance and self.stations_arrived[closest_station_index]==False and self.stations_timeout[closest_station_index]==0:
-                self.stations_timeout[closest_station_index] = self.TIMEOUT
-                self.stations_arrived[closest_station_index] = True
-            if closest_station_distance>self.threshold and closest_station_distance<self.threshold+self.safe_distance and self.stations_arrived[closest_station_index]==True:
-                self.stations_arrived[closest_station_index] = False
-                val = -10
-                print("missed station")
-            elif closest_station_distance<self.threshold and self.stations_timeout[closest_station_index]>self.TIMEOUT-self.WAITTIME+1:
-                val -= 5
-                print("Early leaving station")
+                print("stopped overtime at station")
+            elif self.stations[closest_station_index].arrived==1 and self.stations[closest_station_index].moved_after_stopping==1:
+                val = -1
+                print("restopped at station")
             else:
-                print("Good move")
+                assert self.stations[closest_station_index].arrived!=1
+                val = -1
+                print("stoppped when not the station")
+        else:
+            if self.stations[closest_station_index].arrived==0 and robot_position[1]>min(self.stations[closest_station_index].pos1[1],self.stations[closest_station_index].pos2[1]) and robot_position[1]<max(self.stations[closest_station_index].pos1[1],self.stations[closest_station_index].pos2[1]):
+                self.stations[closest_station_index].arrived = 1
                 val = 1
-
+                dist1 = np.linalg.norm(np.array(self.stations[closest_station_index].pos1)-np.array(robot_position))
+                dist2 = np.linalg.norm(np.array(self.stations[closest_station_index].pos2)-np.array(robot_position))
+                self.stations[closest_station_index].entered_pos_index = 1 if dist1<dist2 else 2
+                print("move arrived at the station, pos_index = ",self.stations[closest_station_index].entered_pos_index)
+            elif self.stations[closest_station_index].arrived==1 and ((self.stations[closest_station_index].entered_pos_index==1 and ((robot_position[1]-self.stations[closest_station_index].pos2[1])*(current_position[1]-self.stations[closest_station_index].pos2[1])<=0)) or (self.stations[closest_station_index].entered_pos_index==2 and ((robot_position[1]-self.stations[closest_station_index].pos1[1])*(current_position[1]-self.stations[closest_station_index].pos1[1])<=0))):
+                self.stations[closest_station_index].arrived = 2
+                if self.stations[closest_station_index].stopped_for>0:
+                    self.stations[closest_station_index].moved_after_stopping = 1
+                    val = -50
+                    print("move station over not stopped at the station")
+                else:
+                    val = 1
+                    print("move station over and stopped at the station")
+            elif self.stations[closest_station_index].arrived==1 and self.stations[closest_station_index].stopped_for>0:
+                self.stations[closest_station_index].moved_after_stopping = 1
+                if self.stations[closest_station_index].stopped_for > self.WAITTIME:
+                    val = 2
+                    print("moved overtime at station")
+                else:
+                    print("moved early from station")
+                    val = -2
+            else:
+                if self.stations[closest_station_index].arrived==1:
+                    print("moving at station")
+                else:
+                    print("moving on track")
+                val = 1
 
         return val,tuple(next_state_floored_sensor_values)
 
@@ -254,6 +301,7 @@ class Agent:
 # create the Robot instance.
 robot = Supervisor()
 stations = [robot.getFromDef("station_1"),robot.getFromDef("station_2"),robot.getFromDef("station_3"),robot.getFromDef("station_4")]
+
 # get the time step of the current world.
 timestep = int(robot.getBasicTimeStep())
 

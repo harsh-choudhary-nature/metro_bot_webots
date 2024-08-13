@@ -18,5 +18,7 @@ table = 0
 with open("q_table.pkl","rb") as fh:
     table = pickle.load(fh)
 
-for state in table:
-    print(state,"\tstop: ",table[state]["stop"],"\tmove: ",table[state]["move"])
+with open("table_file.txt","w") as fh:
+    for state in table:
+        fh.write(f"{state},stop: {table[state]['stop']},move: {table[state]['move']}\n")
+        # print(state,"\tstop: ",table[state]["stop"],"\tmove: ",table[state]["move"])

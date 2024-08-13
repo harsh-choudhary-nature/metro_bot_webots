@@ -18,9 +18,11 @@ def sensor_value_to_index(sensor_value):
     if sensor_value<500:
         value = 400
     elif sensor_value>900:
-        value = 900
+        # value = 900
+        value = 600
     else:
-        value = 500 + (int((sensor_value-500)/100))*100
+        # value = 500 + (int((sensor_value-500)/100))*100
+        value = 500
     return (value-400)/100
 
 def action_to_index(action):
@@ -94,15 +96,15 @@ class Environment:
         val = 0
         nextState.sensor_front = sensor_value_to_index(self.us[1].getValue())
         if action=="move":
-            if state.sensor_front < sensor_value_to_index(900):
-                val = state.sensor_front - sensor_value_to_index(900)
+            if state.sensor_front < sensor_value_to_index(1000):
+                val = state.sensor_front - sensor_value_to_index(1000)
         return val
 
     def handle_station_arrived(self,state:State,action:str,nextState:State)->float:
         val = 0
         if action == "stop":
             if state.station_arrived == 1:
-                if min(state.sensor_left,state.sensor_right)<sensor_value_to_index(900) and min(nextState.sensor_left,nextState.sensor_right)>=sensor_value_to_index(900):
+                if min(state.sensor_left,state.sensor_right)<sensor_value_to_index(1000) and min(nextState.sensor_left,nextState.sensor_right)>=sensor_value_to_index(1000):
                     nextState.station_arrived = 0
                     if state.moved_after_stop == 1:
                         val = -1
@@ -121,7 +123,7 @@ class Environment:
                         else:
                             val = 1
             else:
-                if min(state.sensor_left,state.sensor_right)>=sensor_value_to_index(900) and min(nextState.sensor_left,nextState.sensor_right)<sensor_value_to_index(900):
+                if min(state.sensor_left,state.sensor_right)>=sensor_value_to_index(1000) and min(nextState.sensor_left,nextState.sensor_right)<sensor_value_to_index(1000):
                     nextState.station_arrived = 1
                     val = -1
                 else:
@@ -129,23 +131,23 @@ class Environment:
                     val = -1
         else:
             if state.station_arrived == 1:
-                if min(state.sensor_left,state.sensor_right)<sensor_value_to_index(900) and min(nextState.sensor_left,nextState.sensor_right)>=sensor_value_to_index(900):
+                if min(state.sensor_left,state.sensor_right)<sensor_value_to_index(1000) and min(nextState.sensor_left,nextState.sensor_right)>=sensor_value_to_index(1000):
                     nextState.station_arrived = 0
                     if state.stopped_for>0:
-                        val = 1
+                        val = np.abs(5-state.stopped_for)
                     else:
                         val = -10
                 else:
                     nextState.station_arrived = 1 
                     val = 1 
             else:
-                if min(state.sensor_left,state.sensor_right)>=sensor_value_to_index(900) and min(nextState.sensor_left,nextState.sensor_right)<sensor_value_to_index(900):
+                if min(state.sensor_left,state.sensor_right)>=sensor_value_to_index(1000) and min(nextState.sensor_left,nextState.sensor_right)<sensor_value_to_index(1000):
                     nextState.station_arrived = 1
                     val = 1
                 else:
                     nextState.station_arrived = 0
                     val = 1
-        # print(f"action {action} min(state.sensor_left,state.sensor_right) {min(state.sensor_left,state.sensor_right)} min(nextState.sensor_left,nextState.sensor_right) {min(nextState.sensor_left,nextState.sensor_right)} state.station_arrived {state.station_arrived} nextState.station_arrived {nextState.station_arrived} state.sensor_left_orig {state.sensor_left_orig} nextState.sensor_left_orig {nextState.sensor_left_orig} sensor_value_to_index(900) {sensor_value_to_index(900)}")
+        # print(f"action {action} min(state.sensor_left,state.sensor_right) {min(state.sensor_left,state.sensor_right)} min(nextState.sensor_left,nextState.sensor_right) {min(nextState.sensor_left,nextState.sensor_right)} state.station_arrived {state.station_arrived} nextState.station_arrived {nextState.station_arrived} sensor_value_to_index(1000) {sensor_value_to_index(1000)}")
         return val
     
     def handle_moved_after_stop(self,state:State,action:str,nextState:State)->float:
@@ -196,6 +198,11 @@ class Environment:
     def get_reward_next_state(self,state:State,action:str):
         # sensor_values = [self.us[i].getValue() for i in range(len(self.us))]
         # print(sensor_values)
+        if state.station_arrived == 1 and action == "stop" and state.moved_after_stop == 0:
+            print("stopped for",state.stopped_for)
+        if state.station_arrived == 1 and action == "stop" and state.moved_after_stop == 1:
+            print("restopping at same station")
+            
         nextState = State()
         val = 0
         val += self.handle_sensor_left(state,action,nextState)
@@ -244,9 +251,9 @@ class Agent:
         if len(self.QATable.keys())>0:
             for key in self.QATable:
                 self.policy[key ] = "stop" if self.QATable[key]["stop"]>self.QATable[key]["move"] else "move"
-        self.discount = 0.8
-        self.alpha = 0.1
-        self.epsilon = 0.4
+        self.discount = 0.9
+        self.alpha = 0.2
+        self.epsilon = 0
 
     def handle_new_state(self,state):
         assert state not in self.QATable

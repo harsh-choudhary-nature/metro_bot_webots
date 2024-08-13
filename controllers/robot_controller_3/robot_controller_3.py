@@ -29,7 +29,7 @@ def action_to_index(action):
     return int(action=="move")           # 0 to stop, 1 to move
 
 def stopped_for_to_index(time):
-    return time/32
+    return int(time/32)
 
 def save_Q_Table(table:dict):
     with open("q_table.pkl", "wb") as file:
@@ -133,8 +133,8 @@ class Environment:
             if state.station_arrived == 1:
                 if min(state.sensor_left,state.sensor_right)<sensor_value_to_index(1000) and min(nextState.sensor_left,nextState.sensor_right)>=sensor_value_to_index(1000):
                     nextState.station_arrived = 0
-                    if state.stopped_for>0:
-                        val = np.abs(5-state.stopped_for)
+                    if stopped_for_to_index(state.stopped_for)>0:
+                        val = 1
                     else:
                         val = -10
                 else:
@@ -153,12 +153,12 @@ class Environment:
     def handle_moved_after_stop(self,state:State,action:str,nextState:State)->float:
         val = 0
         if action == "stop":
-            if state.station_arrived == 1:
+            if nextState.station_arrived == 1:
                 nextState.moved_after_stop = state.moved_after_stop
             else:
                 nextState.moved_after_stop = 0
         else:
-            if state.station_arrived == 0:
+            if nextState.station_arrived == 0:
                 nextState.moved_after_stop = 0
             else:
                 if state.moved_after_stop == 1:
@@ -178,30 +178,40 @@ class Environment:
     def handle_stopped_for(self,state:State,action:str,nextState:State)->float:
         val = 0
         if action == "stop":
-            if state.station_arrived == 1:
+            if nextState.station_arrived == 1:
                 if state.moved_after_stop == 1:
                     val = -1
                     nextState.stopped_for = state.stopped_for
                 else:
                     nextState.stopped_for = min(1+state.stopped_for,5*self.timestep)
-                    if state.stopped_for == 5*self.timestep:
+                    if stopped_for_to_index(state.stopped_for) == 5:
                         val = -1
+                    else:
+                        val = 10
             else:
                 nextState.stopped_for = 0
+                val = -1
         else:
-            if state.station_arrived == 1:
+            if nextState.station_arrived == 1:
                 nextState.stopped_for = state.stopped_for
+                if stopped_for_to_index(state.stopped_for) < 5 and state.moved_after_stop == 0:
+                    val = -10
+                else:
+                    val = 1 
             else:
+                val = 1
                 nextState.stopped_for = 0
         return val
 
     def get_reward_next_state(self,state:State,action:str):
         # sensor_values = [self.us[i].getValue() for i in range(len(self.us))]
         # print(sensor_values)
+        state_tuple = (state.sensor_left,state.sensor_right,state.sensor_front,state.station_arrived,state.moved_after_stop,state.prev_action,stopped_for_to_index(state.stopped_for))
+
         if state.station_arrived == 1 and action == "stop" and state.moved_after_stop == 0:
-            print("stopped for",state.stopped_for)
-        if state.station_arrived == 1 and action == "stop" and state.moved_after_stop == 1:
-            print("restopping at same station")
+            print("stopped for",stopped_for_to_index(state.stopped_for))
+        # if state.station_arrived == 1 and action == "stop" and state.moved_after_stop == 1:
+        #     print("restopping at same station",state_tuple)
             
         nextState = State()
         val = 0
@@ -218,6 +228,7 @@ class Agent:
     def __init__(self,robot,MAX_SPEED):
         self.robot = robot
         self.MAX_SPEED = MAX_SPEED
+        self.timestep = int(self.robot.getBasicTimeStep())
 
         # enable devices
         # get motors
@@ -251,9 +262,11 @@ class Agent:
         if len(self.QATable.keys())>0:
             for key in self.QATable:
                 self.policy[key ] = "stop" if self.QATable[key]["stop"]>self.QATable[key]["move"] else "move"
-        self.discount = 0.9
+        self.discount = 0.95
         self.alpha = 0.2
         self.epsilon = 0
+        self.action_timer = 0
+        self.cur_action = "move"
 
     def handle_new_state(self,state):
         assert state not in self.QATable
@@ -272,14 +285,20 @@ class Agent:
 
     def act(self, leftSpeed, rightSpeed):
         # epsilon greedy
-        p = np.random.rand()
+        self.action_timer += 1
         action = None
-        if p<self.epsilon:
-            # take random action
-            action = np.random.choice(self.get_actions(self.QAState))
+        if self.action_timer == self.timestep:
+            self.action_timer = 0
+            p = np.random.rand()
+            if p<self.epsilon:
+                # take random action
+                action = np.random.choice(self.get_actions(self.QAState))
+            else:
+                # take action according to best policy till now
+                action = self.policy[self.QAState]
+            self.cur_action = action
         else:
-            # take action according to best policy till now
-            action = self.policy[self.QAState]
+            action = self.cur_action
         if action == "move":
             self.left_motor.setVelocity(leftSpeed)
             self.right_motor.setVelocity(rightSpeed)
@@ -366,14 +385,14 @@ keyboard.enable(timestep)
 robot.step(timestep)        # to start the simulation with some timesteps passed
 
 initialState = environment.get_initial_state()
-agent.register_initial_state((initialState.sensor_left,initialState.sensor_right,initialState.sensor_front,initialState.station_arrived,initialState.moved_after_stop,initialState.prev_action,initialState.stopped_for))
+agent.register_initial_state((initialState.sensor_left,initialState.sensor_right,initialState.sensor_front,initialState.station_arrived,initialState.moved_after_stop,initialState.prev_action,stopped_for_to_index(initialState.stopped_for)))
 curState = initialState
 
 while robot.step(timestep) != -1:
     leftSpeed, rightSpeed = agent.line_follow()
     action = agent.act(leftSpeed,rightSpeed)
     reward, nextState = environment.get_reward_next_state(curState,action)
-    next_state = (nextState.sensor_left,nextState.sensor_right,nextState.sensor_front,nextState.station_arrived,nextState.moved_after_stop,nextState.prev_action,nextState.stopped_for)
+    next_state = (nextState.sensor_left,nextState.sensor_right,nextState.sensor_front,nextState.station_arrived,nextState.moved_after_stop,nextState.prev_action,stopped_for_to_index(nextState.stopped_for))
     agent.update_QATablePolicy(agent.QAState,action,reward,next_state)
     agent.update_state(next_state)
     curState = nextState

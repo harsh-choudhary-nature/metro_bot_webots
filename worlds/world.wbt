@@ -8,7 +8,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation -0.5773502691896258 0.5773502691896258 0.5773502691896258 2.0944
-  position 0.81406782839919 -0.4273406007708806 14.207940780878083
+  position 0.8140513325116019 -0.42735709670511524 8.37412092612877
   follow "robot"
   followType "None"
 }
@@ -48,8 +48,8 @@ DEF station_1 Solid {
   }
 }
 Robot {
-  translation 0.799722 -0.40985 0.06
-  rotation 0 0 1 -1.5707853071795865
+  translation -0.80394 -0.98941 0.06
+  rotation 0 0 1 2.09441
   children [
     DistanceSensor {
       translation 0.1 0.05 0.01
@@ -278,7 +278,7 @@ DEF station_3 Solid {
   }
 }
 DEF station_4 Solid {
-  translation 0.999711 -0.831855 0.05
+  translation 0.990052 -0.829267 0.05
   rotation 0 0 1 2.8798
   children [
     DEF solid_shape_4 Shape {

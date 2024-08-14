@@ -22,7 +22,7 @@ RectangleArena {
   floorAppearance PBRAppearance {
     baseColorMap ImageTexture {
       url [
-        "../../oval_line.png"
+        "../img/oval_line.png"
       ]
       repeatS FALSE
       repeatT FALSE

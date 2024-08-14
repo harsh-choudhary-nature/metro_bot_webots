@@ -212,7 +212,9 @@ class Environment:
             print("stopped for",stopped_for_to_index(state.stopped_for))
         # if state.station_arrived == 1 and action == "stop" and state.moved_after_stop == 1:
         #     print("restopping at same station",state_tuple)
-            
+        # if state.sensor_right<2:
+        #     print("station on right")
+
         nextState = State()
         val = 0
         val += self.handle_sensor_left(state,action,nextState)
